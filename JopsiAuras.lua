@@ -160,6 +160,8 @@ passiveAnim2:SetSmoothing("IN_OUT")
 passiveGroup:SetLooping("REPEAT")
 
 local isSSPending = false
+local isPassivePending = false
+local isPetPending = false
 
 -- Logic to check pet status
 local function UpdatePetWarning(event)
@@ -182,11 +184,28 @@ local function UpdatePetWarning(event)
     end
 
     if showPet then
-        frame:Show()
-        if not group:IsPlaying() then group:Play() end
+        if isConfigMode or frame:IsShown() then
+            frame:Show()
+            if not group:IsPlaying() then group:Play() end
+            isPetPending = false
+        elseif not isPetPending then
+            isPetPending = true
+            C_Timer.After(1.0, function()
+                isPetPending = false
+                -- Re-check conditions after delay
+                if JopsiAurasDB.warnEnabled then
+                    local _, class = UnitClass("player")
+                    if class == "WARLOCK" and not HasPetUI() and not UnitExists("pet") and not IsMounted() then
+                        frame:Show()
+                        if not group:IsPlaying() then group:Play() end
+                    end
+                end
+            end)
+        end
     else
         frame:Hide()
         group:Stop()
+        isPetPending = false
     end
 
     if showPetBg then frameBg:Show() else frameBg:Hide() end
@@ -290,11 +309,42 @@ local function UpdatePetWarning(event)
     end
 
     if showPassive then
-        passiveFrame:Show()
-        if not passiveGroup:IsPlaying() then passiveGroup:Play() end
+        if isConfigMode or passiveFrame:IsShown() then
+            passiveFrame:Show()
+            if not passiveGroup:IsPlaying() then passiveGroup:Play() end
+            isPassivePending = false
+        elseif not isPassivePending then
+            isPassivePending = true
+            C_Timer.After(1.0, function()
+                isPassivePending = false
+                -- Re-check conditions after delay
+                if JopsiAurasDB.passiveWarnEnabled and UnitExists("pet") and not IsMounted() then
+                    local GetInfoFunc = (C_PetBar and C_PetBar.GetPetActionInfo) or (C_ActionBar and C_ActionBar.GetPetActionInfo) or GetPetActionInfo
+                    if GetInfoFunc then
+                        local foundPassive = false
+                        for i = 1, 10 do
+                            local name, _, _, isActive = GetInfoFunc(i)
+                            if type(name) == "table" then
+                                isActive = name.isActive
+                                name = name.name
+                            end
+                            if (name == "PET_MODE_PASSIVE" or name == "PET_ACTION_MODE_PASSIVE") and isActive then
+                                foundPassive = true
+                                break
+                            end
+                        end
+                        if foundPassive then
+                            passiveFrame:Show()
+                            if not passiveGroup:IsPlaying() then passiveGroup:Play() end
+                        end
+                    end
+                end
+            end)
+        end
     else
         passiveFrame:Hide()
         passiveGroup:Stop()
+        isPassivePending = false
     end
 
     if showPassiveBg then passiveFrameBg:Show() else passiveFrameBg:Hide() end
