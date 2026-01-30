@@ -3,13 +3,23 @@ local addonName, ns = ...
 -- Default Database
 local defaultDB = {
     warnEnabled = true,
+    warnShowIcon = true,
+    warnShowText = true,
+    warnCustomText = "SUMMON YOUR PET!",
     ssEnabled = true,
+    ssShowIcon = true,
+    ssShowText = true,
+    ssCustomText = "SOULSTONE A HEALER!",
     passiveWarnEnabled = true,
+    passiveShowIcon = true,
+    passiveShowText = true,
+    passiveCustomText = "PET IN PASSIVE STANCE",
     warningPos = nil,
     optionsPos = nil,
     ssPos = nil,
     passivePos = nil,
-    autoRepairEnabled = true
+    autoRepairEnabled = true,
+    firstRun = true
 }
 JopsiAurasDB = JopsiAurasDB or defaultDB
 
@@ -58,10 +68,16 @@ frameBg:Hide()
 
 MakeMovable(frame, "warningPos")
 
+-- Icon
+local frameIcon = frame:CreateTexture(nil, "OVERLAY")
+frameIcon:SetSize(64, 64)
+frameIcon:SetPoint("LEFT", frame, "LEFT", 10, 0)
+frameIcon:SetTexture(136082)
+
 -- Warning text
 local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
 text:SetFont("Fonts\\FRIZQT__.TTF", 42, "OUTLINE")
-text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+text:SetPoint("LEFT", frameIcon, "RIGHT", 10, 0)
 text:SetText("SUMMON YOUR PET!")
 text:SetTextColor(1, 0, 0) -- Bright Red
 
@@ -95,9 +111,15 @@ ssFrameBg:SetAllPoints()
 ssFrameBg:SetColorTexture(0.7, 0.3, 1, 0.3)
 ssFrameBg:Hide()
 
+-- SS Icon
+local ssIcon = ssFrame:CreateTexture(nil, "OVERLAY")
+ssIcon:SetSize(64, 64)
+ssIcon:SetPoint("LEFT", ssFrame, "LEFT", 10, 0)
+ssIcon:SetTexture(136210) -- Soulstone Icon
+
 local ssText = ssFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
 ssText:SetFont("Fonts\\FRIZQT__.TTF", 42, "OUTLINE")
-ssText:SetPoint("CENTER", ssFrame, "CENTER", 0, 0)
+ssText:SetPoint("LEFT", ssIcon, "RIGHT", 10, 0)
 ssText:SetText("SOULSTONE A HEALER!")
 ssText:SetTextColor(0.7, 0.3, 1)
 
@@ -122,6 +144,21 @@ ssAnim2:SetSmoothing("IN_OUT")
 
 ssGroup:SetLooping("REPEAT")
 
+-- Helper to apply layout based on icon/text visibility
+local function ApplyLayout(f, icon, txt, dbPrefix)
+    local showIcon = JopsiAurasDB[dbPrefix .. "ShowIcon"]
+    local showText = JopsiAurasDB[dbPrefix .. "ShowText"]
+    local customText = JopsiAurasDB[dbPrefix .. "CustomText"] or ""
+
+    if showIcon then icon:Show() else icon:Hide() end
+    if showText then 
+        txt:Show() 
+        txt:SetText(customText)
+    else 
+        txt:Hide() 
+    end
+end
+
 -- Create the Passive Pet warning frame
 local passiveFrame = CreateFrame("Frame", "JopsiAurasPassiveFrame", UIParent)
 passiveFrame:SetSize(600, 150)
@@ -132,9 +169,15 @@ passiveFrameBg:SetAllPoints()
 passiveFrameBg:SetColorTexture(0.3, 0.4, 1, 0.3) -- Warlock Blueish
 passiveFrameBg:Hide()
 
+-- Passive Icon
+local passiveIcon = passiveFrame:CreateTexture(nil, "OVERLAY")
+passiveIcon:SetSize(64, 64)
+passiveIcon:SetPoint("LEFT", passiveFrame, "LEFT", 10, 0)
+passiveIcon:SetTexture(132311) -- Passive Icon
+
 local passiveText = passiveFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
 passiveText:SetFont("Fonts\\FRIZQT__.TTF", 42, "OUTLINE")
-passiveText:SetPoint("CENTER", passiveFrame, "CENTER", 0, 0)
+passiveText:SetPoint("LEFT", passiveIcon, "RIGHT", 10, 0)
 passiveText:SetText("PET IN PASSIVE STANCE")
 passiveText:SetTextColor(0.3, 0.4, 1)
 
@@ -165,12 +208,19 @@ local isPetPending = false
 
 -- Logic to check pet status
 local function UpdatePetWarning(event)
+    local isConfigMode = optionsFrame and optionsFrame:IsShown()
+
+    -- Apply visual layouts
+    ApplyLayout(frame, frameIcon, text, "warn")
+    ApplyLayout(ssFrame, ssIcon, ssText, "ss")
+    ApplyLayout(passiveFrame, passiveIcon, passiveText, "passive")
+
     -- 1. Pet Warning Logic
     local showPet = false
     local showPetBg = false
 
     if JopsiAurasDB.warnEnabled then
-        if optionsFrame and optionsFrame:IsShown() then
+        if isConfigMode then
             showPet = true
             showPetBg = true
         else
@@ -191,14 +241,25 @@ local function UpdatePetWarning(event)
         elseif not isPetPending then
             isPetPending = true
             C_Timer.After(1.0, function()
+                if not isPetPending then return end -- Guard against rapid changes
                 isPetPending = false
-                -- Re-check conditions after delay
+                
+                -- Check if we still want to show it
+                local stillShow = false
                 if JopsiAurasDB.warnEnabled then
-                    local _, class = UnitClass("player")
-                    if class == "WARLOCK" and not HasPetUI() and not UnitExists("pet") and not IsMounted() then
-                        frame:Show()
-                        if not group:IsPlaying() then group:Play() end
+                    if optionsFrame and optionsFrame:IsShown() then
+                        stillShow = true
+                    else
+                        local _, class = UnitClass("player")
+                        if class == "WARLOCK" and not HasPetUI() and not UnitExists("pet") and not IsMounted() then
+                            stillShow = true
+                        end
                     end
+                end
+
+                if stillShow then
+                    frame:Show()
+                    if not group:IsPlaying() then group:Play() end
                 end
             end)
         end
@@ -211,7 +272,6 @@ local function UpdatePetWarning(event)
     if showPetBg then frameBg:Show() else frameBg:Hide() end
 
     -- Enable/Disable movement for both warnings based on options visibility
-    local isConfigMode = optionsFrame and optionsFrame:IsShown()
     frame:EnableMouse(isConfigMode)
     ssFrame:EnableMouse(isConfigMode)
     passiveFrame:EnableMouse(isConfigMode)
@@ -221,16 +281,14 @@ local function UpdatePetWarning(event)
     local showSSBg = false
 
     if JopsiAurasDB.ssEnabled then
-        local inCombat = InCombatLockdown() or (event == "PLAYER_REGEN_DISABLED")
-        if optionsFrame and optionsFrame:IsShown() then
+        if isConfigMode then
             showSS = true
             showSSBg = true
-        elseif not inCombat then
+        elseif not (InCombatLockdown() or (event == "PLAYER_REGEN_DISABLED")) then
             local inInstance, instanceType = IsInInstance()
             local _, class = UnitClass("player")
             if class == "WARLOCK" and instanceType == "raid" then
                 local spellID = 20707
-                -- In 12.0 we use C_Spell exclusively
                 local cd = C_Spell.GetSpellCooldown(spellID)
                 if cd and (cd.startTime == 0 or cd.duration <= 1.5) then
                     showSS = true
@@ -247,18 +305,28 @@ local function UpdatePetWarning(event)
         elseif not isSSPending then
             isSSPending = true
             C_Timer.After(1.0, function()
+                if not isSSPending then return end
                 isSSPending = false
-                -- Re-check conditions after delay
-                if JopsiAurasDB.ssEnabled and not InCombatLockdown() then
-                    local inInstance, instanceType = IsInInstance()
-                    local _, class = UnitClass("player")
-                    if class == "WARLOCK" and instanceType == "raid" then
-                        local cd = C_Spell.GetSpellCooldown(20707)
-                        if cd and (cd.startTime == 0 or cd.duration <= 1.5) then
-                            ssFrame:Show()
-                            if not ssGroup:IsPlaying() then ssGroup:Play() end
+
+                local stillShow = false
+                if JopsiAurasDB.ssEnabled then
+                    if optionsFrame and optionsFrame:IsShown() then
+                        stillShow = true
+                    elseif not InCombatLockdown() then
+                        local inInstance, instanceType = IsInInstance()
+                        local _, class = UnitClass("player")
+                        if class == "WARLOCK" and instanceType == "raid" then
+                            local cd = C_Spell.GetSpellCooldown(20707)
+                            if cd and (cd.startTime == 0 or cd.duration <= 1.5) then
+                                stillShow = true
+                            end
                         end
                     end
+                end
+
+                if stillShow then
+                    ssFrame:Show()
+                    if not ssGroup:IsPlaying() then ssGroup:Play() end
                 end
             end)
         end
@@ -275,31 +343,22 @@ local function UpdatePetWarning(event)
     local showPassiveBg = false
 
     if JopsiAurasDB.passiveWarnEnabled then
-        if optionsFrame and optionsFrame:IsShown() then
+        if isConfigMode then
             showPassive = true
             showPassiveBg = true
         else
             local _, class = UnitClass("player")
             if class == "WARLOCK" and UnitExists("pet") and not IsMounted() then
-                -- Check pet stance using the most appropriate API available in this build
                 local GetInfoFunc = (C_PetBar and C_PetBar.GetPetActionInfo) or (C_ActionBar and C_ActionBar.GetPetActionInfo) or GetPetActionInfo
-                
                 if GetInfoFunc then
                     for i = 1, 10 do
                         local name, _, isToken, isActive = GetInfoFunc(i)
-                        
-                        -- 12.0 might return a table (like C_Spell.GetSpellCooldown)
                         if type(name) == "table" then
                             isActive = name.isActive
-                            isToken = name.isToken
                             name = name.name
                         end
-                        
-                        -- Robust check for Passive mode across different API versions
-                        if name == "PET_MODE_PASSIVE" or name == "PET_ACTION_MODE_PASSIVE" then
-                            if isActive then
-                                showPassive = true
-                            end
+                        if (name == "PET_MODE_PASSIVE" or name == "PET_ACTION_MODE_PASSIVE") and isActive then
+                            showPassive = true
                             break
                         end
                     end
@@ -315,29 +374,35 @@ local function UpdatePetWarning(event)
             isPassivePending = false
         elseif not isPassivePending then
             isPassivePending = true
-            C_Timer.After(1.0, function()
+            C_Timer.After(0.5, function()
+                if not isPassivePending then return end
                 isPassivePending = false
-                -- Re-check conditions after delay
-                if JopsiAurasDB.passiveWarnEnabled and UnitExists("pet") and not IsMounted() then
-                    local GetInfoFunc = (C_PetBar and C_PetBar.GetPetActionInfo) or (C_ActionBar and C_ActionBar.GetPetActionInfo) or GetPetActionInfo
-                    if GetInfoFunc then
-                        local foundPassive = false
-                        for i = 1, 10 do
-                            local name, _, _, isActive = GetInfoFunc(i)
-                            if type(name) == "table" then
-                                isActive = name.isActive
-                                name = name.name
+
+                local stillShow = false
+                if JopsiAurasDB.passiveWarnEnabled then
+                    if optionsFrame and optionsFrame:IsShown() then
+                        stillShow = true
+                    elseif UnitExists("pet") and not IsMounted() then
+                        local GetInfoFunc = (C_PetBar and C_PetBar.GetPetActionInfo) or (C_ActionBar and C_ActionBar.GetPetActionInfo) or GetPetActionInfo
+                        if GetInfoFunc then
+                            for i = 1, 10 do
+                                local name, _, _, isActive = GetInfoFunc(i)
+                                if type(name) == "table" then
+                                    isActive = name.isActive
+                                    name = name.name
+                                end
+                                if (name == "PET_MODE_PASSIVE" or name == "PET_ACTION_MODE_PASSIVE") and isActive then
+                                    stillShow = true
+                                    break
+                                end
                             end
-                            if (name == "PET_MODE_PASSIVE" or name == "PET_ACTION_MODE_PASSIVE") and isActive then
-                                foundPassive = true
-                                break
-                            end
-                        end
-                        if foundPassive then
-                            passiveFrame:Show()
-                            if not passiveGroup:IsPlaying() then passiveGroup:Play() end
                         end
                     end
+                end
+
+                if stillShow then
+                    passiveFrame:Show()
+                    if not passiveGroup:IsPlaying() then passiveGroup:Play() end
                 end
             end)
         end
@@ -352,7 +417,7 @@ end
 
 -- Options UI
 optionsFrame = CreateFrame("Frame", "JopsiAurasOptions", UIParent, "BasicFrameTemplateWithInset")
-optionsFrame:SetSize(300, 260) -- Increased height for new checkbox
+optionsFrame:SetSize(400, 520)
 optionsFrame.title = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 optionsFrame.title:SetPoint("LEFT", optionsFrame.TitleBg, "LEFT", 5, 0)
 optionsFrame.title:SetText("JopsiAuras Options")
@@ -360,47 +425,127 @@ optionsFrame:Hide()
 
 MakeMovable(optionsFrame, "optionsPos")
 
--- Checkbox for enabling/disabling warning
-local checkButton = CreateFrame("CheckButton", "JopsiAurasCheckButton", optionsFrame, "ChatConfigCheckButtonTemplate")
-checkButton:SetPoint("TOPLEFT", 20, -40)
-_G[checkButton:GetName() .. "Text"]:SetText("Enable Pet Warning")
-checkButton:SetScript("OnClick", function(self)
-    JopsiAurasDB.warnEnabled = self:GetChecked()
-    UpdatePetWarning("CONFIG")
-end)
+local function CreateWarningSection(parent, dbPrefix, title, yOffset)
+    local sectionTitle = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sectionTitle:SetPoint("TOPLEFT", 20, yOffset)
+    sectionTitle:SetText(title)
 
--- Soulstone Checkbox
-local ssCheckButton = CreateFrame("CheckButton", "JopsiAurasSSCheckButton", optionsFrame, "ChatConfigCheckButtonTemplate")
-ssCheckButton:SetPoint("TOPLEFT", 20, -80)
-_G[ssCheckButton:GetName() .. "Text"]:SetText("Enable Soulstone Warning")
-ssCheckButton:SetScript("OnClick", function(self)
-    JopsiAurasDB.ssEnabled = self:GetChecked()
-    UpdatePetWarning("CONFIG") -- This triggers Soulstone check too
-end)
+    local subItems = {}
+    local function ToggleSubItems(enabled)
+        local alpha = enabled and 1 or 0.5
+        for _, item in ipairs(subItems) do
+            item:SetLabelColor(enabled)
+            item:SetEnabled(enabled)
+            item:SetAlpha(alpha)
+        end
+    end
 
--- Passive Pet Checkbox
-local passiveCheckButton = CreateFrame("CheckButton", "JopsiAurasPassiveCheckButton", optionsFrame, "ChatConfigCheckButtonTemplate")
-passiveCheckButton:SetPoint("TOPLEFT", 20, -120)
-_G[passiveCheckButton:GetName() .. "Text"]:SetText("Enable Passive Pet Warning")
-passiveCheckButton:SetScript("OnClick", function(self)
-    JopsiAurasDB.passiveWarnEnabled = self:GetChecked()
-    UpdatePetWarning("CONFIG")
-end)
+    -- Enable Checkbox
+    local enable = CreateFrame("CheckButton", "JopsiAuras" .. dbPrefix .. "EnableBtn", parent, "UICheckButtonTemplate")
+    enable:SetSize(24, 24)
+    enable:SetPoint("TOPLEFT", 20, yOffset - 20)
+    enable.text = enable:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    enable.text:SetPoint("LEFT", enable, "RIGHT", 5, 0)
+    enable.text:SetText("Enable")
+    enable:SetScript("OnClick", function(self)
+        local key = (dbPrefix == "warn") and "warnEnabled" or (dbPrefix == "ss" and "ssEnabled" or "passiveWarnEnabled")
+        JopsiAurasDB[key] = self:GetChecked()
+        ToggleSubItems(self:GetChecked())
+        UpdatePetWarning("CONFIG")
+    end)
+    enable.SetLabelColor = function() end -- No-op for the main toggle
+
+    -- Show Text Checkbox (Now before icon)
+    local showText = CreateFrame("CheckButton", "JopsiAuras" .. dbPrefix .. "TextBtn", parent, "UICheckButtonTemplate")
+    showText:SetSize(24, 24)
+    showText:SetPoint("TOPLEFT", 120, yOffset - 20)
+    showText.text = showText:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    showText.text:SetPoint("LEFT", showText, "RIGHT", 5, 0)
+    showText.text:SetText("Show Text")
+    showText:SetScript("OnClick", function(self)
+        JopsiAurasDB[dbPrefix .. "ShowText"] = self:GetChecked()
+        UpdatePetWarning("CONFIG")
+    end)
+    showText.SetLabelColor = function(self, enabled)
+        if enabled then self.text:SetTextColor(1, 1, 1) else self.text:SetTextColor(0.5, 0.5, 0.5) end
+    end
+    table.insert(subItems, showText)
+
+    -- Show Icon Checkbox (Now after text)
+    local showIcon = CreateFrame("CheckButton", "JopsiAuras" .. dbPrefix .. "IconBtn", parent, "UICheckButtonTemplate")
+    showIcon:SetSize(24, 24)
+    showIcon:SetPoint("TOPLEFT", 240, yOffset - 20)
+    showIcon.text = showIcon:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    showIcon.text:SetPoint("LEFT", showIcon, "RIGHT", 5, 0)
+    showIcon.text:SetText("Show Icon")
+    showIcon:SetScript("OnClick", function(self)
+        JopsiAurasDB[dbPrefix .. "ShowIcon"] = self:GetChecked()
+        UpdatePetWarning("CONFIG")
+    end)
+    showIcon.SetLabelColor = function(self, enabled)
+        if enabled then self.text:SetTextColor(1, 1, 1) else self.text:SetTextColor(0.5, 0.5, 0.5) end
+    end
+    table.insert(subItems, showIcon)
+
+    -- Custom Text EditBox
+    local editBox = CreateFrame("EditBox", "JopsiAuras" .. dbPrefix .. "EditBox", parent, "InputBoxTemplate")
+    editBox:SetSize(300, 30)
+    editBox:SetPoint("TOPLEFT", 30, yOffset - 50)
+    editBox:SetAutoFocus(false)
+    editBox:SetScript("OnTextChanged", function(self)
+        JopsiAurasDB[dbPrefix .. "CustomText"] = self:GetText()
+        UpdatePetWarning("CONFIG")
+    end)
+    editBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    editBox.SetLabelColor = function() end -- InputBox text color is handled differently, SetAlpha is enough
+    table.insert(subItems, editBox)
+
+    enable.UpdateState = function() ToggleSubItems(enable:GetChecked()) end
+
+    return enable, showText, showIcon, editBox
+end
+
+local warnEnable, warnText, warnIcon, warnEdit = CreateWarningSection(optionsFrame, "warn", "Summon Pet Warning", -40)
+local passiveEnable, passiveText, passiveIcon, passiveEdit = CreateWarningSection(optionsFrame, "passive", "Passive Pet Warning", -140)
+local ssEnable, ssText, ssIcon, ssEdit = CreateWarningSection(optionsFrame, "ss", "Soulstone Warning", -240)
 
 -- Auto-Repair Checkbox
-local autoRepairCheckButton = CreateFrame("CheckButton", "JopsiAurasAutoRepairCheckButton", optionsFrame, "ChatConfigCheckButtonTemplate")
-autoRepairCheckButton:SetPoint("TOPLEFT", 20, -160)
-_G[autoRepairCheckButton:GetName() .. "Text"]:SetText("Enable Auto-Repair")
+local repairTitle = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+repairTitle:SetPoint("TOPLEFT", 20, -340)
+repairTitle:SetText("Other Options")
+
+local autoRepairCheckButton = CreateFrame("CheckButton", "JopsiAurasAutoRepairCheckButton", optionsFrame, "UICheckButtonTemplate")
+autoRepairCheckButton:SetSize(24, 24)
+autoRepairCheckButton:SetPoint("TOPLEFT", 20, -360)
+autoRepairCheckButton.text = autoRepairCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+autoRepairCheckButton.text:SetPoint("LEFT", autoRepairCheckButton, "RIGHT", 5, 0)
+autoRepairCheckButton.text:SetText("Enable Auto-Repair")
 autoRepairCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.autoRepairEnabled = self:GetChecked()
 end)
 
--- Initialize Checkbox states
+-- Initialize states
 optionsFrame:SetScript("OnShow", function()
-    checkButton:SetChecked(JopsiAurasDB.warnEnabled)
-    if ssCheckButton then ssCheckButton:SetChecked(JopsiAurasDB.ssEnabled) end
-    if passiveCheckButton then passiveCheckButton:SetChecked(JopsiAurasDB.passiveWarnEnabled) end
-    if autoRepairCheckButton then autoRepairCheckButton:SetChecked(JopsiAurasDB.autoRepairEnabled) end
+    warnEnable:SetChecked(JopsiAurasDB.warnEnabled)
+    warnIcon:SetChecked(JopsiAurasDB.warnShowIcon)
+    warnText:SetChecked(JopsiAurasDB.warnShowText)
+    warnEdit:SetText(JopsiAurasDB.warnCustomText or "")
+    warnEnable:UpdateState()
+
+    passiveEnable:SetChecked(JopsiAurasDB.passiveWarnEnabled)
+    passiveIcon:SetChecked(JopsiAurasDB.passiveShowIcon)
+    passiveText:SetChecked(JopsiAurasDB.passiveShowText)
+    passiveEdit:SetText(JopsiAurasDB.passiveCustomText or "")
+    passiveEnable:UpdateState()
+
+    ssEnable:SetChecked(JopsiAurasDB.ssEnabled)
+    ssIcon:SetChecked(JopsiAurasDB.ssShowIcon)
+    ssText:SetChecked(JopsiAurasDB.ssShowText)
+    ssEdit:SetText(JopsiAurasDB.ssCustomText or "")
+    ssEnable:UpdateState()
+
+    autoRepairCheckButton:SetChecked(JopsiAurasDB.autoRepairEnabled)
     UpdatePetWarning("CONFIG")
 end)
 
@@ -449,6 +594,11 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         LoadFramePosition(ssFrame, "ssPos", "CENTER", 0, 50)
         LoadFramePosition(passiveFrame, "passivePos", "CENTER", 0, -50)
         LoadFramePosition(optionsFrame, "optionsPos", "TOPLEFT", 150, -150)
+        
+        if JopsiAurasDB.firstRun then
+            print("|cff9482c9JopsiAuras|r - You can now customize warning icons and text in the |cff00ff00/ja|r options menu!")
+            JopsiAurasDB.firstRun = false
+        end
 
         print("|cff9482c9JopsiAuras loaded|r - Type |cff00ff00/ja|r for options")
     elseif event == "MERCHANT_SHOW" then
