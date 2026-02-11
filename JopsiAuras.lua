@@ -19,7 +19,7 @@ local defaultDB = {
     ssPos = nil,
     passivePos = nil,
     autoRepairEnabled = true,
-    firstRun = true
+    firstRun = false
 }
 JopsiAurasDB = JopsiAurasDB or defaultDB
 
@@ -57,7 +57,7 @@ local optionsFrame
 
 -- Create the warning frame
 local frame = CreateFrame("Frame", "JopsiAurasWarningFrame", UIParent)
-frame:SetSize(400, 100)
+frame:SetSize(600, 150)
 frame:Hide()
 
 -- Background for visibility during configuration
@@ -156,6 +156,26 @@ local function ApplyLayout(f, icon, txt, dbPrefix)
         txt:SetText(customText)
     else 
         txt:Hide() 
+    end
+
+    icon:ClearAllPoints()
+    txt:ClearAllPoints()
+
+    if showIcon and showText then
+        -- Calculate total width for centering the group
+        local txtWidth = txt:GetStringWidth()
+        local iconWidth = icon:GetWidth()
+        local spacing = 10
+        local totalWidth = iconWidth + spacing + txtWidth
+        
+        -- Start position for the icon to center the whole group
+        local startX = -(totalWidth / 2) + (iconWidth / 2)
+        icon:SetPoint("CENTER", f, "CENTER", startX, 0)
+        txt:SetPoint("LEFT", icon, "RIGHT", spacing, 0)
+    elseif showIcon then
+        icon:SetPoint("CENTER", f, "CENTER", 0, 0)
+    elseif showText then
+        txt:SetPoint("CENTER", f, "CENTER", 0, 0)
     end
 end
 
@@ -374,7 +394,7 @@ local function UpdatePetWarning(event)
             isPassivePending = false
         elseif not isPassivePending then
             isPassivePending = true
-            C_Timer.After(0.5, function()
+            C_Timer.After(1.5, function()
                 if not isPassivePending then return end
                 isPassivePending = false
 
@@ -549,6 +569,35 @@ optionsFrame:SetScript("OnShow", function()
     UpdatePetWarning("CONFIG")
 end)
 
+-- Reset Defaults Button
+local resetButton = CreateFrame("Button", "JopsiAurasResetButton", optionsFrame, "UIPanelButtonTemplate")
+resetButton:SetSize(120, 25)
+resetButton:SetPoint("BOTTOM", optionsFrame, "BOTTOM", 0, 15)
+resetButton:SetText("Reset Defaults")
+resetButton:SetScript("OnClick", function()
+    -- Restore default DB values (except for options position)
+    for k, v in pairs(defaultDB) do
+        if k ~= "optionsPos" then
+            JopsiAurasDB[k] = v
+        end
+    end
+    
+    -- Manually reset warning frame positions to defaults
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 250)
+    
+    ssFrame:ClearAllPoints()
+    ssFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 150)
+    
+    passiveFrame:ClearAllPoints()
+    passiveFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 250)
+
+    -- Refresh UI by re-triggering OnShow
+    optionsFrame:GetScript("OnShow")()
+    
+    print("|cff9482c9JopsiAuras|r: All settings and warning positions have been reset to defaults (Options window position preserved).")
+end)
+
 optionsFrame:SetScript("OnHide", function()
     UpdatePetWarning()
 end)
@@ -590,10 +639,10 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         end
         
         -- Load positions
-        LoadFramePosition(frame, "warningPos", "CENTER", 0, 150)
-        LoadFramePosition(ssFrame, "ssPos", "CENTER", 0, 50)
-        LoadFramePosition(passiveFrame, "passivePos", "CENTER", 0, -50)
-        LoadFramePosition(optionsFrame, "optionsPos", "TOPLEFT", 150, -150)
+        LoadFramePosition(frame, "warningPos", "CENTER", 0, 250)
+        LoadFramePosition(ssFrame, "ssPos", "CENTER", 0, 150)
+        LoadFramePosition(passiveFrame, "passivePos", "CENTER", 0, 250)
+        LoadFramePosition(optionsFrame, "optionsPos", "TOPLEFT", 150, -125)
         
         if JopsiAurasDB.firstRun then
             print("|cff9482c9JopsiAuras|r - You can now customize warning icons and text in the |cff00ff00/ja|r options menu!")

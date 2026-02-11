@@ -1,6 +1,6 @@
-## Interface: 120000
+## Interface: 120001
 ## Title: JopsiAuras
-## Version: 1.2.0
+## Version: 1.3.0
 ## Notes: Warlock utility to track if pet is summoned, if pet is on passive and to use SS on a healer in raid. Also includes autorepair. Options to enable/disable each feature ingame via /ja.
 ## Author: Jopsi
 ## Category: Warlock
