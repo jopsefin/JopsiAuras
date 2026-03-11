@@ -14,10 +14,15 @@ local defaultDB = {
     passiveShowIcon = true,
     passiveShowText = true,
     passiveCustomText = "PET IN PASSIVE STANCE",
+    hsEnabled = true,
+    hsShowIcon = true,
+    hsShowText = true,
+    hsCustomText = "OUT OF HEALTHSTONES",
     warningPos = nil,
     optionsPos = nil,
     ssPos = nil,
     passivePos = nil,
+    hsPos = nil,
     autoRepairEnabled = true,
     firstRun = false
 }
@@ -222,9 +227,53 @@ passiveAnim2:SetSmoothing("IN_OUT")
 
 passiveGroup:SetLooping("REPEAT")
 
+-- Create the Healthstone warning frame
+local hsFrame = CreateFrame("Frame", "JopsiAurasHSFrame", UIParent)
+hsFrame:SetSize(600, 150)
+hsFrame:Hide()
+
+local hsFrameBg = hsFrame:CreateTexture(nil, "BACKGROUND")
+hsFrameBg:SetAllPoints()
+hsFrameBg:SetColorTexture(0.2, 1, 0.2, 0.2) -- Green tint
+hsFrameBg:Hide()
+
+-- HS Icon (Healthstone texture)
+local hsIcon = hsFrame:CreateTexture(nil, "OVERLAY")
+hsIcon:SetSize(64, 64)
+hsIcon:SetPoint("LEFT", hsFrame, "LEFT", 10, 0)
+hsIcon:SetTexture(538745) -- Healthstone icon
+
+local hsText = hsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
+hsText:SetFont("Fonts\\FRIZQT__.TTF", 42, "OUTLINE")
+hsText:SetPoint("LEFT", hsIcon, "RIGHT", 10, 0)
+hsText:SetText("OUT OF HEALTHSTONES")
+hsText:SetTextColor(0.2, 1, 0.2) -- Bright Green
+
+hsFrame:SetFrameStrata("HIGH")
+MakeMovable(hsFrame, "hsPos")
+
+-- Animation for Healthstone (subtle pulsing)
+local hsGroup = hsFrame:CreateAnimationGroup()
+local hsAnim = hsGroup:CreateAnimation("Alpha")
+hsAnim:SetFromAlpha(1)
+hsAnim:SetToAlpha(0.6)
+hsAnim:SetDuration(0.8)
+hsAnim:SetOrder(1)
+hsAnim:SetSmoothing("IN_OUT")
+
+local hsAnim2 = hsGroup:CreateAnimation("Alpha")
+hsAnim2:SetFromAlpha(0.6)
+hsAnim2:SetToAlpha(1)
+hsAnim2:SetDuration(0.8)
+hsAnim2:SetOrder(2)
+hsAnim2:SetSmoothing("IN_OUT")
+
+hsGroup:SetLooping("REPEAT")
+
 local isSSPending = false
 local isPassivePending = false
 local isPetPending = false
+local isHsPending = false
 
 -- Logic to check pet status
 local function UpdatePetWarning(event)
@@ -234,6 +283,14 @@ local function UpdatePetWarning(event)
     ApplyLayout(frame, frameIcon, text, "warn")
     ApplyLayout(ssFrame, ssIcon, ssText, "ss")
     ApplyLayout(passiveFrame, passiveIcon, passiveText, "passive")
+    ApplyLayout(hsFrame, hsIcon, hsText, "hs")
+
+    -- Swap pet warning icon based on spec (Demonology = Felguard)
+    if GetSpecialization() == 2 then
+        frameIcon:SetTexture(136216) -- Felguard (Demonology)
+    else
+        frameIcon:SetTexture(136082) -- Default
+    end
 
     -- 1. Pet Warning Logic
     local showPet = false
@@ -245,10 +302,14 @@ local function UpdatePetWarning(event)
             showPetBg = true
         else
             local _, class = UnitClass("player")
-            if class == "WARLOCK" then
-                if not HasPetUI() and not UnitExists("pet") and not IsMounted() then
-                    showPet = true
-                end
+            if class == "WARLOCK"
+                and not HasPetUI()
+                and not UnitExists("pet")
+                and not IsMounted()
+                and not UnitOnTaxi("player")
+                and not UnitInVehicle("player")
+                and not UnitIsDeadOrGhost("player") then
+                showPet = true
             end
         end
     end
@@ -271,7 +332,13 @@ local function UpdatePetWarning(event)
                         stillShow = true
                     else
                         local _, class = UnitClass("player")
-                        if class == "WARLOCK" and not HasPetUI() and not UnitExists("pet") and not IsMounted() then
+                        if class == "WARLOCK"
+                            and not HasPetUI()
+                            and not UnitExists("pet")
+                            and not IsMounted()
+                            and not UnitOnTaxi("player")
+                            and not UnitInVehicle("player")
+                            and not UnitIsDeadOrGhost("player") then
                             stillShow = true
                         end
                     end
@@ -295,6 +362,7 @@ local function UpdatePetWarning(event)
     frame:EnableMouse(isConfigMode)
     ssFrame:EnableMouse(isConfigMode)
     passiveFrame:EnableMouse(isConfigMode)
+    hsFrame:EnableMouse(isConfigMode)
 
     -- 2. Soulstone Warning Logic
     local showSS = false
@@ -368,7 +436,12 @@ local function UpdatePetWarning(event)
             showPassiveBg = true
         else
             local _, class = UnitClass("player")
-            if class == "WARLOCK" and UnitExists("pet") and not IsMounted() then
+            if class == "WARLOCK"
+                and UnitExists("pet")
+                and not IsMounted()
+                and not UnitOnTaxi("player")
+                and not UnitInVehicle("player")
+                and not UnitIsDeadOrGhost("player") then
                 local GetInfoFunc = (C_PetBar and C_PetBar.GetPetActionInfo) or (C_ActionBar and C_ActionBar.GetPetActionInfo) or GetPetActionInfo
                 if GetInfoFunc then
                     for i = 1, 10 do
@@ -402,7 +475,11 @@ local function UpdatePetWarning(event)
                 if JopsiAurasDB.passiveWarnEnabled then
                     if optionsFrame and optionsFrame:IsShown() then
                         stillShow = true
-                    elseif UnitExists("pet") and not IsMounted() then
+                    elseif UnitExists("pet")
+                        and not IsMounted()
+                        and not UnitOnTaxi("player")
+                        and not UnitInVehicle("player")
+                        and not UnitIsDeadOrGhost("player") then
                         local GetInfoFunc = (C_PetBar and C_PetBar.GetPetActionInfo) or (C_ActionBar and C_ActionBar.GetPetActionInfo) or GetPetActionInfo
                         if GetInfoFunc then
                             for i = 1, 10 do
@@ -433,11 +510,65 @@ local function UpdatePetWarning(event)
     end
 
     if showPassiveBg then passiveFrameBg:Show() else passiveFrameBg:Hide() end
+
+    -- 4. Healthstone Warning Logic
+    local showHS = false
+    local showHSBg = false
+
+    if JopsiAurasDB.hsEnabled then
+        if isConfigMode then
+            showHS = true
+            showHSBg = true
+        elseif not InCombatLockdown() then
+            local _, class = UnitClass("player")
+            -- Item 5512 = Healthstone, 224464 = Demonic Healthstone (Pact of Gluttony)
+            if class == "WARLOCK" and GetItemCount(5512) == 0 and GetItemCount(224464) == 0 then
+                showHS = true
+            end
+        end
+    end
+
+    if showHS then
+        if isConfigMode or hsFrame:IsShown() then
+            hsFrame:Show()
+            if not hsGroup:IsPlaying() then hsGroup:Play() end
+            isHsPending = false
+        elseif not isHsPending then
+            isHsPending = true
+            C_Timer.After(1.0, function()
+                if not isHsPending then return end
+                isHsPending = false
+
+                local stillShow = false
+                if JopsiAurasDB.hsEnabled then
+                    if optionsFrame and optionsFrame:IsShown() then
+                        stillShow = true
+                    elseif not InCombatLockdown() then
+                        local _, class = UnitClass("player")
+                        if class == "WARLOCK" and GetItemCount(5512) == 0 and GetItemCount(224464) == 0 then
+                            stillShow = true
+                        end
+                    end
+                end
+
+                if stillShow then
+                    hsFrame:Show()
+                    if not hsGroup:IsPlaying() then hsGroup:Play() end
+                end
+            end)
+        end
+    else
+        hsFrame:Hide()
+        hsGroup:Stop()
+        isHsPending = false
+    end
+
+    if showHSBg then hsFrameBg:Show() else hsFrameBg:Hide() end
 end
 
 -- Options UI
 optionsFrame = CreateFrame("Frame", "JopsiAurasOptions", UIParent, "BasicFrameTemplateWithInset")
-optionsFrame:SetSize(400, 520)
+optionsFrame:SetSize(400, 620)
 optionsFrame.title = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 optionsFrame.title:SetPoint("LEFT", optionsFrame.TitleBg, "LEFT", 5, 0)
 optionsFrame.title:SetText("JopsiAuras Options")
@@ -468,7 +599,10 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
     enable.text:SetPoint("LEFT", enable, "RIGHT", 5, 0)
     enable.text:SetText("Enable")
     enable:SetScript("OnClick", function(self)
-        local key = (dbPrefix == "warn") and "warnEnabled" or (dbPrefix == "ss" and "ssEnabled" or "passiveWarnEnabled")
+        local key = (dbPrefix == "warn") and "warnEnabled"
+            or (dbPrefix == "ss" and "ssEnabled")
+            or (dbPrefix == "hs" and "hsEnabled")
+            or "passiveWarnEnabled"
         JopsiAurasDB[key] = self:GetChecked()
         ToggleSubItems(self:GetChecked())
         UpdatePetWarning("CONFIG")
@@ -529,15 +663,16 @@ end
 local warnEnable, warnText, warnIcon, warnEdit = CreateWarningSection(optionsFrame, "warn", "Summon Pet Warning", -40)
 local passiveEnable, passiveText, passiveIcon, passiveEdit = CreateWarningSection(optionsFrame, "passive", "Passive Pet Warning", -140)
 local ssEnable, ssText, ssIcon, ssEdit = CreateWarningSection(optionsFrame, "ss", "Soulstone Warning", -240)
+local hsEnable, hsOptText, hsOptIcon, hsEdit = CreateWarningSection(optionsFrame, "hs", "Healthstone Warning", -340)
 
 -- Auto-Repair Checkbox
 local repairTitle = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-repairTitle:SetPoint("TOPLEFT", 20, -340)
+repairTitle:SetPoint("TOPLEFT", 20, -440)
 repairTitle:SetText("Other Options")
 
 local autoRepairCheckButton = CreateFrame("CheckButton", "JopsiAurasAutoRepairCheckButton", optionsFrame, "UICheckButtonTemplate")
 autoRepairCheckButton:SetSize(24, 24)
-autoRepairCheckButton:SetPoint("TOPLEFT", 20, -360)
+autoRepairCheckButton:SetPoint("TOPLEFT", 20, -460)
 autoRepairCheckButton.text = autoRepairCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 autoRepairCheckButton.text:SetPoint("LEFT", autoRepairCheckButton, "RIGHT", 5, 0)
 autoRepairCheckButton.text:SetText("Enable Auto-Repair")
@@ -565,6 +700,12 @@ optionsFrame:SetScript("OnShow", function()
     ssEdit:SetText(JopsiAurasDB.ssCustomText or "")
     ssEnable:UpdateState()
 
+    hsEnable:SetChecked(JopsiAurasDB.hsEnabled)
+    hsOptIcon:SetChecked(JopsiAurasDB.hsShowIcon)
+    hsOptText:SetChecked(JopsiAurasDB.hsShowText)
+    hsEdit:SetText(JopsiAurasDB.hsCustomText or "")
+    hsEnable:UpdateState()
+
     autoRepairCheckButton:SetChecked(JopsiAurasDB.autoRepairEnabled)
     UpdatePetWarning("CONFIG")
 end)
@@ -591,6 +732,9 @@ resetButton:SetScript("OnClick", function()
     
     passiveFrame:ClearAllPoints()
     passiveFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 250)
+
+    hsFrame:ClearAllPoints()
+    hsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 50)
 
     -- Refresh UI by re-triggering OnShow
     optionsFrame:GetScript("OnShow")()
@@ -623,6 +767,7 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("MERCHANT_SHOW")
 frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("BAG_UPDATE_DELAYED")
 
 frame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -642,6 +787,7 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         LoadFramePosition(frame, "warningPos", "CENTER", 0, 250)
         LoadFramePosition(ssFrame, "ssPos", "CENTER", 0, 150)
         LoadFramePosition(passiveFrame, "passivePos", "CENTER", 0, 250)
+        LoadFramePosition(hsFrame, "hsPos", "CENTER", 0, 50)
         LoadFramePosition(optionsFrame, "optionsPos", "TOPLEFT", 150, -125)
         
         if JopsiAurasDB.firstRun then
