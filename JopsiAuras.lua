@@ -24,6 +24,8 @@ local defaultDB = {
     passivePos = nil,
     hsPos = nil,
     autoRepairEnabled = true,
+    autoSellJunkEnabled = true,
+    ahExpansionFilterEnabled = true,
     firstRun = false
 }
 JopsiAurasDB = JopsiAurasDB or defaultDB
@@ -303,8 +305,8 @@ local function UpdatePetWarning(event)
         else
             local _, class = UnitClass("player")
             if class == "WARLOCK"
-                and not HasPetUI()
-                and not UnitExists("pet")
+                and (not HasPetUI() or UnitIsDead("pet"))
+                and (not UnitExists("pet") or UnitIsDead("pet"))
                 and not IsMounted()
                 and not UnitOnTaxi("player")
                 and not UnitInVehicle("player")
@@ -333,8 +335,8 @@ local function UpdatePetWarning(event)
                     else
                         local _, class = UnitClass("player")
                         if class == "WARLOCK"
-                            and not HasPetUI()
-                            and not UnitExists("pet")
+                            and (not HasPetUI() or UnitIsDead("pet"))
+                            and (not UnitExists("pet") or UnitIsDead("pet"))
                             and not IsMounted()
                             and not UnitOnTaxi("player")
                             and not UnitInVehicle("player")
@@ -574,6 +576,9 @@ optionsFrame.title:SetPoint("LEFT", optionsFrame.TitleBg, "LEFT", 5, 0)
 optionsFrame.title:SetText("JopsiAuras Options")
 optionsFrame:Hide()
 
+-- Close on ESC
+tinsert(UISpecialFrames, "JopsiAurasOptions")
+
 MakeMovable(optionsFrame, "optionsPos")
 
 local function CreateWarningSection(parent, dbPrefix, title, yOffset)
@@ -680,6 +685,26 @@ autoRepairCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.autoRepairEnabled = self:GetChecked()
 end)
 
+local autoSellCheckButton = CreateFrame("CheckButton", "JopsiAurasAutoSellCheckButton", optionsFrame, "UICheckButtonTemplate")
+autoSellCheckButton:SetSize(24, 24)
+autoSellCheckButton:SetPoint("TOPLEFT", 20, -485)
+autoSellCheckButton.text = autoSellCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+autoSellCheckButton.text:SetPoint("LEFT", autoSellCheckButton, "RIGHT", 5, 0)
+autoSellCheckButton.text:SetText("Enable Auto-Sell Junk")
+autoSellCheckButton:SetScript("OnClick", function(self)
+    JopsiAurasDB.autoSellJunkEnabled = self:GetChecked()
+end)
+
+local ahFilterCheckButton = CreateFrame("CheckButton", "JopsiAurasAHFilterCheckButton", optionsFrame, "UICheckButtonTemplate")
+ahFilterCheckButton:SetSize(24, 24)
+ahFilterCheckButton:SetPoint("TOPLEFT", 20, -510)
+ahFilterCheckButton.text = ahFilterCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+ahFilterCheckButton.text:SetPoint("LEFT", ahFilterCheckButton, "RIGHT", 5, 0)
+ahFilterCheckButton.text:SetText("Enable AH Auto-Filter for Current Expansion Only")
+ahFilterCheckButton:SetScript("OnClick", function(self)
+    JopsiAurasDB.ahExpansionFilterEnabled = self:GetChecked()
+end)
+
 -- Initialize states
 optionsFrame:SetScript("OnShow", function()
     warnEnable:SetChecked(JopsiAurasDB.warnEnabled)
@@ -707,6 +732,8 @@ optionsFrame:SetScript("OnShow", function()
     hsEnable:UpdateState()
 
     autoRepairCheckButton:SetChecked(JopsiAurasDB.autoRepairEnabled)
+    autoSellCheckButton:SetChecked(JopsiAurasDB.autoSellJunkEnabled)
+    ahFilterCheckButton:SetChecked(JopsiAurasDB.ahExpansionFilterEnabled)
     UpdatePetWarning("CONFIG")
 end)
 
@@ -768,6 +795,37 @@ frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("MERCHANT_SHOW")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("BAG_UPDATE_DELAYED")
+frame:RegisterEvent("AUCTION_HOUSE_SHOW")
+
+local function SellJunkItems()
+    local totalValue = 0
+    if C_MerchantFrame.IsSellAllJunkEnabled() then
+        for bag = 0, 5 do
+            for slot = 1, C_Container.GetContainerNumSlots(bag) do
+                local itemInfo = C_Container.GetContainerItemInfo(bag, slot)
+                if itemInfo and itemInfo.quality == 0 and itemInfo.hyperlink then
+                    local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemInfo.hyperlink)
+                    if sellPrice and sellPrice > 0 then
+                        totalValue = totalValue + (sellPrice * itemInfo.stackCount)
+                    end
+                end
+            end
+        end
+
+        C_MerchantFrame.SellAllJunkItems()
+
+        if totalValue > 0 then
+            local gold = math.floor(totalValue / 10000)
+            local silver = math.floor((totalValue % 10000) / 100)
+            local copper = totalValue % 100
+            print(string.format("|cff9482c9JopsiAuras|r: Sold all junk items for |cffffd700%dg|r |cffc7c7c7%ds|r |cffeda55f%dc|r", gold, silver, copper))
+        else
+            print("|cff9482c9JopsiAuras|r: Sold all junk items.")
+        end
+    end
+end
+
+local ahFilterHooked = false
 
 frame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -797,6 +855,10 @@ frame:SetScript("OnEvent", function(self, event, arg1)
 
         print("|cff9482c9JopsiAuras loaded|r - Type |cff00ff00/ja|r for options")
     elseif event == "MERCHANT_SHOW" then
+        if JopsiAurasDB.autoSellJunkEnabled then
+            SellJunkItems()
+        end
+
         if JopsiAurasDB.autoRepairEnabled and CanMerchantRepair() then
             local cost, canRepair = GetRepairAllCost()
             if canRepair and cost > 0 then
@@ -812,6 +874,29 @@ frame:SetScript("OnEvent", function(self, event, arg1)
                 else
                     print("|cff9482c9JopsiAuras|r: |cffff0000Not enough gold to repair!|r")
                 end
+            end
+        end
+    elseif event == "AUCTION_HOUSE_SHOW" then
+        if not ahFilterHooked then
+            if AuctionHouseFrame and AuctionHouseFrame.SearchBar then
+                local searchBar = AuctionHouseFrame.SearchBar
+                
+                local function applyAHFilter()
+                    if JopsiAurasDB.ahExpansionFilterEnabled and searchBar.FilterButton and searchBar.FilterButton.filters and Enum.AuctionHouseFilter and Enum.AuctionHouseFilter.CurrentExpansionOnly ~= nil then
+                        searchBar.FilterButton.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
+                        if searchBar.UpdateClearFiltersButton then
+                            searchBar:UpdateClearFiltersButton()
+                        end
+                    end
+                end
+
+                searchBar:HookScript("OnShow", function()
+                    C_Timer.After(0, applyAHFilter)
+                end)
+                
+                ahFilterHooked = true
+                -- Run it explicitly the first time as OnShow for the SearchBar might already have fired
+                C_Timer.After(0, applyAHFilter)
             end
         end
     end
