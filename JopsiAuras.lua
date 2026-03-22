@@ -24,9 +24,9 @@ local defaultDB = {
     passivePos = nil,
     hsPos = nil,
     autoRepairEnabled = true,
-    autoSellJunkEnabled = true,
-    ahExpansionFilterEnabled = true,
-    firstRun = false
+    autoSellJunkEnabled = false,
+    ahExpansionFilterEnabled = false,
+    lastVersion = ""
 }
 JopsiAurasDB = JopsiAurasDB or defaultDB
 
@@ -573,7 +573,8 @@ optionsFrame = CreateFrame("Frame", "JopsiAurasOptions", UIParent, "BasicFrameTe
 optionsFrame:SetSize(400, 620)
 optionsFrame.title = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 optionsFrame.title:SetPoint("LEFT", optionsFrame.TitleBg, "LEFT", 5, 0)
-optionsFrame.title:SetText("JopsiAuras Options")
+local addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Unknown"
+optionsFrame.title:SetText("JopsiAuras Options v" .. addonVersion)
 optionsFrame:Hide()
 
 -- Close on ESC
@@ -743,9 +744,9 @@ resetButton:SetSize(120, 25)
 resetButton:SetPoint("BOTTOM", optionsFrame, "BOTTOM", 0, 15)
 resetButton:SetText("Reset Defaults")
 resetButton:SetScript("OnClick", function()
-    -- Restore default DB values (except for options position)
+    -- Restore default DB values (except for options position and version tracking)
     for k, v in pairs(defaultDB) do
-        if k ~= "optionsPos" then
+        if k ~= "optionsPos" and k ~= "lastVersion" then
             JopsiAurasDB[k] = v
         end
     end
@@ -766,7 +767,7 @@ resetButton:SetScript("OnClick", function()
     -- Refresh UI by re-triggering OnShow
     optionsFrame:GetScript("OnShow")()
     
-    print("|cff9482c9JopsiAuras|r: All settings and warning positions have been reset to defaults (Options window position preserved).")
+    print("|cff9482c9JopsiAuras|r: All settings and warning positions have been reset to defaults.")
 end)
 
 optionsFrame:SetScript("OnHide", function()
@@ -799,11 +800,13 @@ frame:RegisterEvent("AUCTION_HOUSE_SHOW")
 
 local function SellJunkItems()
     local totalValue = 0
+    local junkCount = 0
     if C_MerchantFrame.IsSellAllJunkEnabled() then
         for bag = 0, 5 do
             for slot = 1, C_Container.GetContainerNumSlots(bag) do
                 local itemInfo = C_Container.GetContainerItemInfo(bag, slot)
-                if itemInfo and itemInfo.quality == 0 and itemInfo.hyperlink then
+                if itemInfo and itemInfo.quality == 0 and itemInfo.hyperlink and not itemInfo.hasNoValue then
+                    junkCount = junkCount + 1
                     local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemInfo.hyperlink)
                     if sellPrice and sellPrice > 0 then
                         totalValue = totalValue + (sellPrice * itemInfo.stackCount)
@@ -812,15 +815,17 @@ local function SellJunkItems()
             end
         end
 
-        C_MerchantFrame.SellAllJunkItems()
+        if junkCount > 0 then
+            C_MerchantFrame.SellAllJunkItems()
 
-        if totalValue > 0 then
-            local gold = math.floor(totalValue / 10000)
-            local silver = math.floor((totalValue % 10000) / 100)
-            local copper = totalValue % 100
-            print(string.format("|cff9482c9JopsiAuras|r: Sold all junk items for |cffffd700%dg|r |cffc7c7c7%ds|r |cffeda55f%dc|r", gold, silver, copper))
-        else
-            print("|cff9482c9JopsiAuras|r: Sold all junk items.")
+            if totalValue > 0 then
+                local gold = math.floor(totalValue / 10000)
+                local silver = math.floor((totalValue % 10000) / 100)
+                local copper = totalValue % 100
+                print(string.format("|cff9482c9JopsiAuras|r: Sold all junk items for |cffffd700%dg|r |cffc7c7c7%ds|r |cffeda55f%dc|r", gold, silver, copper))
+            else
+                print("|cff9482c9JopsiAuras|r: Sold all junk items.")
+            end
         end
     end
 end
@@ -848,9 +853,10 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         LoadFramePosition(hsFrame, "hsPos", "CENTER", 0, 50)
         LoadFramePosition(optionsFrame, "optionsPos", "TOPLEFT", 150, -125)
         
-        if JopsiAurasDB.firstRun then
-            print("|cff9482c9JopsiAuras|r - You can now customize warning icons and text in the |cff00ff00/ja|r options menu!")
-            JopsiAurasDB.firstRun = false
+        local currentVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Unknown"
+        if JopsiAurasDB.lastVersion ~= currentVersion then
+            print("|cff9482c9JopsiAuras|r updated to v" .. currentVersion .. "! You can customize settings in the |cff00ff00/ja|r options menu.")
+            JopsiAurasDB.lastVersion = currentVersion
         end
 
         print("|cff9482c9JopsiAuras loaded|r - Type |cff00ff00/ja|r for options")
