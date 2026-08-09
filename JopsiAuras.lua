@@ -571,18 +571,95 @@ local function UpdatePetWarning(event)
 end
 
 -- Options UI
-optionsFrame = CreateFrame("Frame", "JopsiAurasOptions", UIParent, "BasicFrameTemplate")
-optionsFrame:SetSize(400, 665)
-optionsFrame.title = optionsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-optionsFrame.title:SetPoint("LEFT", optionsFrame.TitleBg, "LEFT", 5, 0)
+optionsFrame = CreateFrame("Frame", "JopsiAurasOptions", UIParent, "BackdropTemplate")
+optionsFrame:SetSize(400, 685)
+optionsFrame:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16
+})
+optionsFrame:SetBackdropColor(0.06, 0.05, 0.08, 0.95) -- Deep dark purple-tinted gray
+optionsFrame:Hide()
+
+-- Custom Title Bar / Header
+local header = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
+header:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 0, 0)
+header:SetPoint("TOPRIGHT", optionsFrame, "TOPRIGHT", 0, 0)
+header:SetHeight(30)
+header:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16
+})
+header:SetBackdropColor(0.18, 0.14, 0.25, 1.0) -- Dark warlock purple title bar
+
+optionsFrame.title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+optionsFrame.title:SetPoint("LEFT", header, "LEFT", 10, 0)
+optionsFrame.title:SetTextColor(0.9, 0.85, 1.0) -- Very light purple
 local addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Unknown"
 optionsFrame.title:SetText("JopsiAuras Options v" .. addonVersion)
-optionsFrame:Hide()
+
+-- Custom Close Button
+local closeButton = CreateFrame("Button", nil, header, "BackdropTemplate")
+closeButton:SetSize(20, 20)
+closeButton:SetPoint("RIGHT", header, "RIGHT", -5, 0)
+
+local closeText = closeButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+closeText:SetPoint("CENTER")
+closeText:SetText("X")
+closeText:SetTextColor(0.8, 0.3, 0.3) -- soft red
+
+local closeBg = closeButton:CreateTexture(nil, "BACKGROUND")
+closeBg:SetAllPoints()
+closeBg:SetColorTexture(1, 0, 0, 0) -- transparent initially
+
+closeButton:SetScript("OnClick", function()
+    optionsFrame:Hide()
+end)
+closeButton:SetScript("OnEnter", function()
+    closeText:SetTextColor(1, 0.3, 0.3)
+    closeBg:SetColorTexture(1, 0, 0, 0.2)
+end)
+closeButton:SetScript("OnLeave", function()
+    closeText:SetTextColor(0.8, 0.3, 0.3)
+    closeBg:SetColorTexture(1, 0, 0, 0)
+end)
 
 -- Close on ESC
 tinsert(UISpecialFrames, "JopsiAurasOptions")
 
 MakeMovable(optionsFrame, "optionsPos")
+
+local function StyleCheckbox(chk)
+    local normal = chk:GetNormalTexture()
+    if normal then
+        normal:SetAlpha(0)
+    end
+    
+    local pushed = chk:GetPushedTexture()
+    if pushed then
+        pushed:SetAlpha(0)
+    end
+    
+    local highlight = chk:GetHighlightTexture()
+    if highlight then
+        highlight:SetColorTexture(1, 1, 1, 0.1)
+        highlight:SetAllPoints()
+    end
+    
+    -- Create a flat styled background/border frame behind the checkbutton
+    local bg = CreateFrame("Frame", nil, chk, "BackdropTemplate")
+    bg:SetAllPoints(chk)
+    bg:SetFrameLevel(math.max(0, chk:GetFrameLevel() - 1))
+    bg:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        tile = true, tileSize = 16, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    bg:SetBackdropColor(0.04, 0.03, 0.05, 0.8)
+    bg:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
+    
+    chk.customBg = bg
+end
 
 local function CreateWarningSection(parent, dbPrefix, title, yOffset)
     local box = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -591,16 +668,17 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
     box:SetHeight(90)
     box:SetBackdrop({
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        tile = true, tileSize = 16, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
     })
-    box:SetBackdropColor(0, 0, 0, 0.4)
-    box:SetBackdropBorderColor(0.5, 0.5, 0.5, 0.8)
+    box:SetBackdropColor(0.08, 0.07, 0.1, 0.6) -- Slightly lighter purple-tinted dark gray
+    box:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8) -- Muted warlock purple border
 
     local sectionTitle = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sectionTitle:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
+    sectionTitle:SetPoint("TOPLEFT", box, "TOPLEFT", 10, 8) -- Anchor to the box itself, position slightly above/on the top border
     sectionTitle:SetText(title)
+    sectionTitle:SetTextColor(0.78, 0.71, 0.99) -- Bright warlock purple accent
 
     local subItems = {}
     local function ToggleSubItems(enabled)
@@ -614,8 +692,8 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
 
     -- Enable Checkbox
     local enable = CreateFrame("CheckButton", "JopsiAuras" .. dbPrefix .. "EnableBtn", box, "UICheckButtonTemplate")
-    enable:SetSize(24, 24)
-    enable:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset - 20)
+    enable:SetSize(20, 20)
+    enable:SetPoint("TOPLEFT", box, "TOPLEFT", 10, -17)
     enable.text = enable:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     enable.text:SetPoint("LEFT", enable, "RIGHT", 5, 0)
     enable.text:SetText("Enable")
@@ -629,11 +707,12 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
         UpdatePetWarning("CONFIG")
     end)
     enable.SetLabelColor = function() end -- No-op for the main toggle
+    StyleCheckbox(enable)
 
     -- Show Text Checkbox
     local showText = CreateFrame("CheckButton", "JopsiAuras" .. dbPrefix .. "TextBtn", box, "UICheckButtonTemplate")
-    showText:SetSize(24, 24)
-    showText:SetPoint("TOPLEFT", parent, "TOPLEFT", 120, yOffset - 20)
+    showText:SetSize(20, 20)
+    showText:SetPoint("LEFT", enable.text, "RIGHT", 20, 0)
     showText.text = showText:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     showText.text:SetPoint("LEFT", showText, "RIGHT", 5, 0)
     showText.text:SetText("Show Text")
@@ -642,14 +721,15 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
         UpdatePetWarning("CONFIG")
     end)
     showText.SetLabelColor = function(self, enabled)
-        if enabled then self.text:SetTextColor(1, 1, 1) else self.text:SetTextColor(0.5, 0.5, 0.5) end
+        if enabled then self.text:SetTextColor(0.9, 0.9, 0.9) else self.text:SetTextColor(0.4, 0.4, 0.4) end
     end
     table.insert(subItems, showText)
+    StyleCheckbox(showText)
 
     -- Show Icon Checkbox
     local showIcon = CreateFrame("CheckButton", "JopsiAuras" .. dbPrefix .. "IconBtn", box, "UICheckButtonTemplate")
-    showIcon:SetSize(24, 24)
-    showIcon:SetPoint("TOPLEFT", parent, "TOPLEFT", 240, yOffset - 20)
+    showIcon:SetSize(20, 20)
+    showIcon:SetPoint("LEFT", showText.text, "RIGHT", 20, 0)
     showIcon.text = showIcon:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     showIcon.text:SetPoint("LEFT", showIcon, "RIGHT", 5, 0)
     showIcon.text:SetText("Show Icon")
@@ -658,22 +738,37 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
         UpdatePetWarning("CONFIG")
     end)
     showIcon.SetLabelColor = function(self, enabled)
-        if enabled then self.text:SetTextColor(1, 1, 1) else self.text:SetTextColor(0.5, 0.5, 0.5) end
+        if enabled then self.text:SetTextColor(0.9, 0.9, 0.9) else self.text:SetTextColor(0.4, 0.4, 0.4) end
     end
     table.insert(subItems, showIcon)
+    StyleCheckbox(showIcon)
 
     -- Custom Text EditBox
-    local editBox = CreateFrame("EditBox", "JopsiAuras" .. dbPrefix .. "EditBox", box, "InputBoxTemplate")
-    editBox:SetSize(300, 30)
-    editBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 30, yOffset - 50)
+    local editBox = CreateFrame("EditBox", "JopsiAuras" .. dbPrefix .. "EditBox", box, "BackdropTemplate")
+    editBox:SetHeight(22)
+    editBox:SetPoint("TOPLEFT", box, "TOPLEFT", 10, -50)
+    editBox:SetPoint("TOPRIGHT", box, "TOPRIGHT", -10, -50)
     editBox:SetAutoFocus(false)
+    editBox:SetFontObject("ChatFontNormal")
+    editBox:SetTextInsets(5, 5, 0, 0)
+    editBox:SetTextColor(0.9, 0.85, 1.0)
+    
+    editBox:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        tile = true, tileSize = 16, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    editBox:SetBackdropColor(0.04, 0.03, 0.05, 0.8)
+    editBox:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
+
     editBox:SetScript("OnTextChanged", function(self)
         JopsiAurasDB[dbPrefix .. "CustomText"] = self:GetText()
         UpdatePetWarning("CONFIG")
     end)
     editBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    editBox.SetLabelColor = function() end -- InputBox text color is handled differently, SetAlpha is enough
+    editBox.SetLabelColor = function() end
     table.insert(subItems, editBox)
 
     enable.UpdateState = function() ToggleSubItems(enable:GetChecked()) end
@@ -681,15 +776,15 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
     return enable, showText, showIcon, editBox, box
 end
 
-local warnEnable, warnText, warnIcon, warnEdit, warnBox = CreateWarningSection(optionsFrame, "warn", "Summon Pet Warning", -40)
-local passiveEnable, passiveText, passiveIcon, passiveEdit, passiveBox = CreateWarningSection(optionsFrame, "passive", "Passive Pet Warning", -140)
-local ssEnable, ssText, ssIcon, ssEdit, ssBox = CreateWarningSection(optionsFrame, "ss", "Soulstone Warning", -240)
+local warnEnable, warnText, warnIcon, warnEdit, warnBox = CreateWarningSection(optionsFrame, "warn", "Summon Pet Warning", -60)
+local passiveEnable, passiveText, passiveIcon, passiveEdit, passiveBox = CreateWarningSection(optionsFrame, "passive", "Passive Pet Warning", -160)
+local ssEnable, ssText, ssIcon, ssEdit, ssBox = CreateWarningSection(optionsFrame, "ss", "Soulstone Warning", -260)
 
 ssBox:SetHeight(115)
 
 local ssAlwaysShowCheckButton = CreateFrame("CheckButton", "JopsiAurasSSAlwaysShowCheckButton", ssBox, "UICheckButtonTemplate")
-ssAlwaysShowCheckButton:SetSize(24, 24)
-ssAlwaysShowCheckButton:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 30, -320)
+ssAlwaysShowCheckButton:SetSize(20, 20)
+ssAlwaysShowCheckButton:SetPoint("TOPLEFT", ssBox, "TOPLEFT", 10, -85)
 ssAlwaysShowCheckButton.text = ssAlwaysShowCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 ssAlwaysShowCheckButton.text:SetPoint("LEFT", ssAlwaysShowCheckButton, "RIGHT", 5, 0)
 ssAlwaysShowCheckButton.text:SetText("Enable SS Warning Outside of Raids")
@@ -697,22 +792,23 @@ ssAlwaysShowCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.ssAlwaysShowEnabled = self:GetChecked()
     UpdatePetWarning("CONFIG")
 end)
+StyleCheckbox(ssAlwaysShowCheckButton)
 
 ssEnable:HookScript("OnClick", function(self)
     local enabled = self:GetChecked()
     local alpha = enabled and 1 or 0.5
     ssAlwaysShowCheckButton:SetEnabled(enabled)
     ssAlwaysShowCheckButton:SetAlpha(alpha)
-    if enabled then ssAlwaysShowCheckButton.text:SetTextColor(1, 1, 1) else ssAlwaysShowCheckButton.text:SetTextColor(0.5, 0.5, 0.5) end
+    if enabled then ssAlwaysShowCheckButton.text:SetTextColor(0.9, 0.9, 0.9) else ssAlwaysShowCheckButton.text:SetTextColor(0.4, 0.4, 0.4) end
 end)
 
-local hsEnable, hsOptText, hsOptIcon, hsEdit, hsBox = CreateWarningSection(optionsFrame, "hs", "Healthstone Warning", -365)
+local hsEnable, hsOptText, hsOptIcon, hsEdit, hsBox = CreateWarningSection(optionsFrame, "hs", "Healthstone Warning", -385)
 
 hsBox:SetHeight(115)
 
 local hsInCombatCheckButton = CreateFrame("CheckButton", "JopsiAurasHSInCombatCheckButton", hsBox, "UICheckButtonTemplate")
-hsInCombatCheckButton:SetSize(24, 24)
-hsInCombatCheckButton:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 30, -445)
+hsInCombatCheckButton:SetSize(20, 20)
+hsInCombatCheckButton:SetPoint("TOPLEFT", hsBox, "TOPLEFT", 10, -85)
 hsInCombatCheckButton.text = hsInCombatCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 hsInCombatCheckButton.text:SetPoint("LEFT", hsInCombatCheckButton, "RIGHT", 5, 0)
 hsInCombatCheckButton.text:SetText("Enable HS Warning In Combat")
@@ -720,62 +816,67 @@ hsInCombatCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.hsInCombatEnabled = self:GetChecked()
     UpdatePetWarning("CONFIG")
 end)
+StyleCheckbox(hsInCombatCheckButton)
 
 hsEnable:HookScript("OnClick", function(self)
     local enabled = self:GetChecked()
     local alpha = enabled and 1 or 0.5
     hsInCombatCheckButton:SetEnabled(enabled)
     hsInCombatCheckButton:SetAlpha(alpha)
-    if enabled then hsInCombatCheckButton.text:SetTextColor(1, 1, 1) else hsInCombatCheckButton.text:SetTextColor(0.5, 0.5, 0.5) end
+    if enabled then hsInCombatCheckButton.text:SetTextColor(0.9, 0.9, 0.9) else hsInCombatCheckButton.text:SetTextColor(0.4, 0.4, 0.4) end
 end)
 
 local otherBox = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
-otherBox:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 10, -485)
-otherBox:SetPoint("TOPRIGHT", optionsFrame, "TOPRIGHT", -10, -485)
+otherBox:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 10, -505)
+otherBox:SetPoint("TOPRIGHT", optionsFrame, "TOPRIGHT", -10, -505)
 otherBox:SetHeight(115)
 otherBox:SetBackdrop({
     bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 16,
-    insets = { left = 3, right = 3, top = 3, bottom = 3 }
+    edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16, edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
 })
-otherBox:SetBackdropColor(0, 0, 0, 0.4)
-otherBox:SetBackdropBorderColor(0.5, 0.5, 0.5, 0.8)
+otherBox:SetBackdropColor(0.08, 0.07, 0.1, 0.6)
+otherBox:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
 
 -- Auto-Repair Checkbox
 local repairTitle = otherBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-repairTitle:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 20, -495)
+repairTitle:SetPoint("TOPLEFT", otherBox, "TOPLEFT", 10, 8)
 repairTitle:SetText("Other Options")
+repairTitle:SetTextColor(0.78, 0.71, 0.99)
 
 local autoRepairCheckButton = CreateFrame("CheckButton", "JopsiAurasAutoRepairCheckButton", otherBox, "UICheckButtonTemplate")
-autoRepairCheckButton:SetSize(24, 24)
-autoRepairCheckButton:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 20, -515)
+autoRepairCheckButton:SetSize(20, 20)
+autoRepairCheckButton:SetPoint("TOPLEFT", otherBox, "TOPLEFT", 10, -20)
 autoRepairCheckButton.text = autoRepairCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 autoRepairCheckButton.text:SetPoint("LEFT", autoRepairCheckButton, "RIGHT", 5, 0)
 autoRepairCheckButton.text:SetText("Enable Auto-Repair")
 autoRepairCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.autoRepairEnabled = self:GetChecked()
 end)
+StyleCheckbox(autoRepairCheckButton)
 
 local autoSellCheckButton = CreateFrame("CheckButton", "JopsiAurasAutoSellCheckButton", otherBox, "UICheckButtonTemplate")
-autoSellCheckButton:SetSize(24, 24)
-autoSellCheckButton:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 20, -540)
+autoSellCheckButton:SetSize(20, 20)
+autoSellCheckButton:SetPoint("TOPLEFT", otherBox, "TOPLEFT", 10, -50)
 autoSellCheckButton.text = autoSellCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 autoSellCheckButton.text:SetPoint("LEFT", autoSellCheckButton, "RIGHT", 5, 0)
 autoSellCheckButton.text:SetText("Enable Auto-Sell Junk")
 autoSellCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.autoSellJunkEnabled = self:GetChecked()
 end)
+StyleCheckbox(autoSellCheckButton)
 
 local ahFilterCheckButton = CreateFrame("CheckButton", "JopsiAurasAHFilterCheckButton", otherBox, "UICheckButtonTemplate")
-ahFilterCheckButton:SetSize(24, 24)
-ahFilterCheckButton:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 20, -565)
+ahFilterCheckButton:SetSize(20, 20)
+ahFilterCheckButton:SetPoint("TOPLEFT", otherBox, "TOPLEFT", 10, -80)
 ahFilterCheckButton.text = ahFilterCheckButton:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 ahFilterCheckButton.text:SetPoint("LEFT", ahFilterCheckButton, "RIGHT", 5, 0)
 ahFilterCheckButton.text:SetText("Enable AH Auto-Filter for Current Expansion Only")
 ahFilterCheckButton:SetScript("OnClick", function(self)
     JopsiAurasDB.ahExpansionFilterEnabled = self:GetChecked()
 end)
+StyleCheckbox(ahFilterCheckButton)
 
 -- Initialize states
 optionsFrame:SetScript("OnShow", function()
@@ -801,7 +902,7 @@ optionsFrame:SetScript("OnShow", function()
     local ssEnabled = JopsiAurasDB.ssEnabled
     ssAlwaysShowCheckButton:SetEnabled(ssEnabled)
     ssAlwaysShowCheckButton:SetAlpha(ssEnabled and 1 or 0.5)
-    if ssEnabled then ssAlwaysShowCheckButton.text:SetTextColor(1, 1, 1) else ssAlwaysShowCheckButton.text:SetTextColor(0.5, 0.5, 0.5) end
+    if ssEnabled then ssAlwaysShowCheckButton.text:SetTextColor(0.9, 0.9, 0.9) else ssAlwaysShowCheckButton.text:SetTextColor(0.4, 0.4, 0.4) end
 
     hsEnable:SetChecked(JopsiAurasDB.hsEnabled)
     hsOptIcon:SetChecked(JopsiAurasDB.hsShowIcon)
@@ -813,7 +914,7 @@ optionsFrame:SetScript("OnShow", function()
     local hsEnabled = JopsiAurasDB.hsEnabled
     hsInCombatCheckButton:SetEnabled(hsEnabled)
     hsInCombatCheckButton:SetAlpha(hsEnabled and 1 or 0.5)
-    if hsEnabled then hsInCombatCheckButton.text:SetTextColor(1, 1, 1) else hsInCombatCheckButton.text:SetTextColor(0.5, 0.5, 0.5) end
+    if hsEnabled then hsInCombatCheckButton.text:SetTextColor(0.9, 0.9, 0.9) else hsInCombatCheckButton.text:SetTextColor(0.4, 0.4, 0.4) end
 
     autoRepairCheckButton:SetChecked(JopsiAurasDB.autoRepairEnabled)
     autoSellCheckButton:SetChecked(JopsiAurasDB.autoSellJunkEnabled)
@@ -822,10 +923,31 @@ optionsFrame:SetScript("OnShow", function()
 end)
 
 -- Reset Defaults Button
-local resetButton = CreateFrame("Button", "JopsiAurasResetButton", optionsFrame, "UIPanelButtonTemplate")
-resetButton:SetSize(120, 25)
+local resetButton = CreateFrame("Button", "JopsiAurasResetButton", optionsFrame, "BackdropTemplate")
+resetButton:SetSize(140, 26)
 resetButton:SetPoint("BOTTOM", optionsFrame, "BOTTOM", 0, 15)
-resetButton:SetText("Reset Defaults")
+
+resetButton:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16, edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
+})
+resetButton:SetBackdropColor(0.2, 0.15, 0.28, 1.0) -- Warlock purple background
+resetButton:SetBackdropBorderColor(0.58, 0.51, 0.79, 1.0) -- Bright warlock purple border
+
+local buttonText = resetButton:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+buttonText:SetPoint("CENTER")
+buttonText:SetText("Reset Defaults")
+buttonText:SetTextColor(0.9, 0.85, 1.0)
+
+resetButton:SetScript("OnEnter", function(self)
+    self:SetBackdropColor(0.3, 0.22, 0.42, 1.0)
+end)
+resetButton:SetScript("OnLeave", function(self)
+    self:SetBackdropColor(0.2, 0.15, 0.28, 1.0)
+end)
+
 resetButton:SetScript("OnClick", function()
     -- Restore default DB values (except for options position and version tracking)
     for k, v in pairs(defaultDB) do
