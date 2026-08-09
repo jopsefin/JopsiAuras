@@ -28,6 +28,8 @@ local defaultDB = {
     autoRepairEnabled = true,
     autoSellJunkEnabled = false,
     ahExpansionFilterEnabled = false,
+    fontPath = "Friz Quadrata",
+    fontSize = 42,
     lastVersion = ""
 }
 JopsiAurasDB = JopsiAurasDB or defaultDB
@@ -63,6 +65,8 @@ end
 
 -- Forward declaration for scope
 local optionsFrame
+local fontDropdown
+local UpdatePetWarning
 
 -- Create the warning frame
 local frame = CreateFrame("Frame", "JopsiAurasWarningFrame", UIParent)
@@ -158,6 +162,10 @@ local function ApplyLayout(f, icon, txt, dbPrefix)
     local showIcon = JopsiAurasDB[dbPrefix .. "ShowIcon"]
     local showText = JopsiAurasDB[dbPrefix .. "ShowText"]
     local customText = JopsiAurasDB[dbPrefix .. "CustomText"] or ""
+
+    local fontSize = JopsiAurasDB and JopsiAurasDB.fontSize or 42
+    local iconSize = math.floor(fontSize * 1.5)
+    icon:SetSize(iconSize, iconSize)
 
     if showIcon then icon:Show() else icon:Hide() end
     if showText then 
@@ -274,13 +282,107 @@ hsAnim2:SetSmoothing("IN_OUT")
 
 hsGroup:SetLooping("REPEAT")
 
+local function ComparePaths(p1, p2)
+    if not p1 or not p2 then return p1 == p2 end
+    return p1:lower():gsub("/", "\\") == p2:lower():gsub("/", "\\")
+end
+
+local function GetFontPath(name)
+    if not name or name == "" then return "Fonts\\FRIZQT__.TTF" end
+    
+    -- Backward compatibility for saved paths
+    if name:find("\\") or name:find("/") then
+        return name
+    end
+    
+    if name == "Friz Quadrata" then return "Fonts\\FRIZQT__.TTF" end
+    if name == "Arial" then return "Fonts\\ARIALN.TTF" end
+    if name == "Morpheus" then return "Fonts\\MORPHEUS.ttf" end
+    if name == "Skurri" then return "Fonts\\skurri.ttf" end
+    
+    if LibStub then
+        local LSM = LibStub("LibSharedMedia-3.0", true)
+        if LSM then
+            local path = LSM:Fetch("font", name)
+            if path then return path end
+        end
+    end
+    return "Fonts\\FRIZQT__.TTF"
+end
+
+local function GetFontName(name)
+    if not name or name == "" then return "Friz Quadrata" end
+    
+    -- Backward compatibility: resolve saved paths to names
+    if name:find("\\") or name:find("/") then
+        if name:lower():find("frizqt") then return "Friz Quadrata" end
+        if name:lower():find("arialn") then return "Arial" end
+        if name:lower():find("morpheus") then return "Morpheus" end
+        if name:lower():find("skurri") then return "Skurri" end
+        
+        if LibStub then
+            local LSM = LibStub("LibSharedMedia-3.0", true)
+            if LSM then
+                local fonts = LSM:List("font")
+                for _, fName in ipairs(fonts) do
+                    if ComparePaths(LSM:Fetch("font", fName), name) then
+                        return fName
+                    end
+                end
+            end
+        end
+        return name:match("([^\\/]+)%..+$") or name
+    end
+    
+    return name
+end
+
+-- Hidden dummy FontString used to test if a font path is valid/loadable in WoW
+local dummyFontString = frame:CreateFontString(nil, "OVERLAY")
+dummyFontString:Hide()
+
+local function IsFontValid(path)
+    if not path or path == "" then return false end
+    -- SetFont returns true/1 on success, nil/false if the font file is missing/broken
+    return dummyFontString:SetFont(path, 12)
+end
+
+local function UpdateFont()
+    local name = JopsiAurasDB and JopsiAurasDB.fontPath
+    if not name or name == "" then
+        name = "Friz Quadrata"
+    end
+    
+    local path = GetFontPath(name)
+    if not IsFontValid(path) then
+        print(string.format("|cff9482c9JopsiAuras|r: Font '|cffff0000%s|r' could not be loaded (file missing or client needs restart). Falling back to default.", GetFontName(name)))
+        name = "Friz Quadrata"
+        path = "Fonts\\FRIZQT__.TTF"
+        if JopsiAurasDB then
+            JopsiAurasDB.fontPath = "Friz Quadrata"
+        end
+    end
+    
+    local size = JopsiAurasDB and JopsiAurasDB.fontSize or 42
+    text:SetFont(path, size, "OUTLINE")
+    ssText:SetFont(path, size, "OUTLINE")
+    passiveText:SetFont(path, size, "OUTLINE")
+    hsText:SetFont(path, size, "OUTLINE")
+    if JopsiAurasFontDropdown then
+        JopsiAurasFontDropdown:SetText(GetFontName(name))
+    end
+    
+    -- Refresh layout centering and scale warning icons dynamically
+    UpdatePetWarning("CONFIG")
+end
+
 local isSSPending = false
 local isPassivePending = false
 local isPetPending = false
 local isHsPending = false
 
 -- Logic to check pet status
-local function UpdatePetWarning(event)
+UpdatePetWarning = function(event)
     local isConfigMode = optionsFrame and optionsFrame:IsShown()
 
     -- Apply visual layouts
@@ -572,7 +674,7 @@ end
 
 -- Options UI
 optionsFrame = CreateFrame("Frame", "JopsiAurasOptions", UIParent, "BackdropTemplate")
-optionsFrame:SetSize(400, 685)
+optionsFrame:SetSize(400, 800)
 optionsFrame:SetBackdrop({
     bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
     tile = true, tileSize = 16
@@ -591,7 +693,7 @@ header:SetBackdrop({
 })
 header:SetBackdropColor(0.18, 0.14, 0.25, 1.0) -- Dark warlock purple title bar
 
-optionsFrame.title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+optionsFrame.title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 optionsFrame.title:SetPoint("LEFT", header, "LEFT", 10, 0)
 optionsFrame.title:SetTextColor(0.9, 0.85, 1.0) -- Very light purple
 local addonVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Unknown"
@@ -777,8 +879,8 @@ local function CreateWarningSection(parent, dbPrefix, title, yOffset)
 end
 
 local warnEnable, warnText, warnIcon, warnEdit, warnBox = CreateWarningSection(optionsFrame, "warn", "Summon Pet Warning", -60)
-local passiveEnable, passiveText, passiveIcon, passiveEdit, passiveBox = CreateWarningSection(optionsFrame, "passive", "Passive Pet Warning", -160)
-local ssEnable, ssText, ssIcon, ssEdit, ssBox = CreateWarningSection(optionsFrame, "ss", "Soulstone Warning", -260)
+local passiveEnable, passiveText, passiveIcon, passiveEdit, passiveBox = CreateWarningSection(optionsFrame, "passive", "Passive Pet Warning", -164)
+local ssEnable, ssText, ssIcon, ssEdit, ssBox = CreateWarningSection(optionsFrame, "ss", "Soulstone Warning", -268)
 
 ssBox:SetHeight(115)
 
@@ -802,7 +904,7 @@ ssEnable:HookScript("OnClick", function(self)
     if enabled then ssAlwaysShowCheckButton.text:SetTextColor(0.9, 0.9, 0.9) else ssAlwaysShowCheckButton.text:SetTextColor(0.4, 0.4, 0.4) end
 end)
 
-local hsEnable, hsOptText, hsOptIcon, hsEdit, hsBox = CreateWarningSection(optionsFrame, "hs", "Healthstone Warning", -385)
+local hsEnable, hsOptText, hsOptIcon, hsEdit, hsBox = CreateWarningSection(optionsFrame, "hs", "Healthstone Warning", -397)
 
 hsBox:SetHeight(115)
 
@@ -827,8 +929,8 @@ hsEnable:HookScript("OnClick", function(self)
 end)
 
 local otherBox = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
-otherBox:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 10, -505)
-otherBox:SetPoint("TOPRIGHT", optionsFrame, "TOPRIGHT", -10, -505)
+otherBox:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 10, -625)
+otherBox:SetPoint("TOPRIGHT", optionsFrame, "TOPRIGHT", -10, -625)
 otherBox:SetHeight(115)
 otherBox:SetBackdrop({
     bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -878,8 +980,185 @@ ahFilterCheckButton:SetScript("OnClick", function(self)
 end)
 StyleCheckbox(ahFilterCheckButton)
 
+-- New Warning Text Settings Section
+local fontBox = CreateFrame("Frame", nil, optionsFrame, "BackdropTemplate")
+fontBox:SetPoint("TOPLEFT", optionsFrame, "TOPLEFT", 10, -516)
+fontBox:SetPoint("TOPRIGHT", optionsFrame, "TOPRIGHT", -10, -516)
+fontBox:SetHeight(95)
+fontBox:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16, edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
+})
+fontBox:SetBackdropColor(0.08, 0.07, 0.1, 0.6)
+fontBox:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
+
+local fontBoxTitle = fontBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+fontBoxTitle:SetPoint("TOPLEFT", fontBox, "TOPLEFT", 10, 8)
+fontBoxTitle:SetText("Warning Text Settings")
+fontBoxTitle:SetTextColor(0.78, 0.71, 0.99)
+
+-- Custom Font Label & Dropdown Menu inside fontBox
+local fontLabel = fontBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+fontLabel:SetPoint("TOPLEFT", fontBox, "TOPLEFT", 10, -20)
+fontLabel:SetText("Select Warning Font:")
+fontLabel:SetTextColor(0.9, 0.9, 0.9)
+
+fontDropdown = CreateFrame("DropdownButton", "JopsiAurasFontDropdown", fontBox, "WowStyle1DropdownTemplate")
+fontDropdown:SetSize(180, 22)
+fontDropdown:SetPoint("LEFT", fontLabel, "RIGHT", 10, 0)
+fontDropdown:SetPoint("RIGHT", fontBox, "RIGHT", -10, 0)
+
+-- Create a flat styled background/border frame behind the dropdown button to match the theme
+local bg = CreateFrame("Frame", nil, fontDropdown, "BackdropTemplate")
+bg:SetAllPoints(fontDropdown)
+bg:SetFrameLevel(math.max(0, fontDropdown:GetFrameLevel() - 1))
+bg:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16, edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
+})
+bg:SetBackdropColor(0.04, 0.03, 0.05, 0.8)
+bg:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
+
+-- Hide default background/border textures of the template by setting their alpha to 0
+local arrowTex = fontDropdown.Arrow or fontDropdown.ArrowTexture
+local highlightTex = fontDropdown:GetHighlightTexture()
+for _, region in ipairs({fontDropdown:GetRegions()}) do
+    if region:IsObjectType("Texture") and region ~= arrowTex and region ~= highlightTex then
+        region:SetAlpha(0)
+    end
+end
+
+-- Align text cleanly on the left margin
+local dropdownText = fontDropdown:GetFontString()
+if dropdownText then
+    dropdownText:SetTextColor(0.9, 0.85, 1.0)
+    dropdownText:SetPoint("LEFT", fontDropdown, "LEFT", 8, 0)
+end
+
+-- Define the selection text callback for WowStyle1DropdownTemplate to draw the selected text
+fontDropdown:SetSelectionText(function()
+    return GetFontName(JopsiAurasDB and JopsiAurasDB.fontPath)
+end)
+
+-- Add hover feedback to our custom background frame
+fontDropdown:HookScript("OnEnter", function()
+    bg:SetBackdropColor(0.08, 0.06, 0.1, 0.9)
+    bg:SetBackdropBorderColor(0.58, 0.51, 0.79, 1.0)
+end)
+fontDropdown:HookScript("OnLeave", function()
+    bg:SetBackdropColor(0.04, 0.03, 0.05, 0.8)
+    bg:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
+end)
+
+fontDropdown:SetupMenu(function(dropdown, rootDescription)
+    local standardFonts = {
+        { name = "Friz Quadrata", key = "Friz Quadrata" },
+        { name = "Arial", key = "Arial" },
+        { name = "Morpheus", key = "Morpheus" },
+        { name = "Skurri", key = "Skurri" }
+    }
+    
+    for _, font in ipairs(standardFonts) do
+        rootDescription:CreateRadio(font.name,
+            function() return GetFontName(JopsiAurasDB.fontPath) == font.key end,
+            function()
+                JopsiAurasDB.fontPath = font.key
+                UpdateFont()
+            end
+        )
+    end
+    
+    if LibStub then
+        local LSM = LibStub("LibSharedMedia-3.0", true)
+        if LSM then
+            local fonts = LSM:List("font")
+            if fonts and #fonts > 0 then
+                rootDescription:CreateDivider()
+                for _, fontName in ipairs(fonts) do
+                    rootDescription:CreateRadio(fontName,
+                        function() return GetFontName(JopsiAurasDB.fontPath) == fontName end,
+                        function()
+                            JopsiAurasDB.fontPath = fontName
+                            UpdateFont()
+                        end
+                    )
+                end
+            end
+        end
+    end
+end)
+
+-- Custom Font Size Label & EditBox inside fontBox
+local fontSizeLabel = fontBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+fontSizeLabel:SetPoint("TOPLEFT", fontBox, "TOPLEFT", 10, -55)
+fontSizeLabel:SetText("Select Font Size:")
+fontSizeLabel:SetTextColor(0.9, 0.9, 0.9)
+
+local fontSizeEdit = CreateFrame("EditBox", "JopsiAurasFontSizeEdit", fontBox, "BackdropTemplate")
+fontSizeEdit:SetSize(50, 22)
+fontSizeEdit:SetPoint("LEFT", fontSizeLabel, "RIGHT", 10, 0)
+fontSizeEdit:SetAutoFocus(false)
+fontSizeEdit:SetFontObject("ChatFontNormal")
+fontSizeEdit:SetTextInsets(5, 5, 0, 0)
+fontSizeEdit:SetTextColor(0.9, 0.85, 1.0)
+fontSizeEdit:SetNumeric(true)
+fontSizeEdit:SetMaxLetters(3)
+
+fontSizeEdit:SetBackdrop({
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    tile = true, tileSize = 16, edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
+})
+fontSizeEdit:SetBackdropColor(0.04, 0.03, 0.05, 0.8)
+fontSizeEdit:SetBackdropBorderColor(0.3, 0.25, 0.4, 0.8)
+
+local originalSize
+
+fontSizeEdit:SetScript("OnEditFocusGained", function(self)
+    originalSize = tonumber(self:GetText()) or JopsiAurasDB.fontSize or 42
+end)
+
+fontSizeEdit:SetScript("OnTextChanged", function(self)
+    local val = tonumber(self:GetText())
+    if val and val >= 10 and val <= 100 then
+        JopsiAurasDB.fontSize = val
+        UpdateFont()
+    end
+end)
+
+fontSizeEdit:SetScript("OnEnterPressed", function(self)
+    self:ClearFocus()
+end)
+
+fontSizeEdit:SetScript("OnEditFocusLost", function(self)
+    local val = tonumber(self:GetText())
+    if not val or val < 10 or val > 100 then
+        local fallback = originalSize or JopsiAurasDB.fontSize or 42
+        JopsiAurasDB.fontSize = fallback
+        self:SetText(tostring(fallback))
+        UpdateFont()
+    end
+end)
+
+fontSizeEdit:SetScript("OnEscapePressed", function(self)
+    local fallback = originalSize or JopsiAurasDB.fontSize or 42
+    JopsiAurasDB.fontSize = fallback
+    self:SetText(tostring(fallback))
+    UpdateFont()
+    self:ClearFocus()
+end)
+
 -- Initialize states
 optionsFrame:SetScript("OnShow", function()
+    UpdateFont()
+    if JopsiAurasFontSizeEdit then
+        JopsiAurasFontSizeEdit:SetText(tostring(JopsiAurasDB.fontSize or 42))
+    end
     warnEnable:SetChecked(JopsiAurasDB.warnEnabled)
     warnIcon:SetChecked(JopsiAurasDB.warnShowIcon)
     warnText:SetChecked(JopsiAurasDB.warnShowText)
@@ -949,14 +1228,22 @@ resetButton:SetScript("OnLeave", function(self)
 end)
 
 resetButton:SetScript("OnClick", function()
-    -- Restore default DB values (except for options position and version tracking)
+    -- Restore default DB values (except options position, version, and 'Other Options' choices)
     for k, v in pairs(defaultDB) do
-        if k ~= "optionsPos" and k ~= "lastVersion" then
+        if k ~= "optionsPos" 
+            and k ~= "lastVersion" 
+            and k ~= "autoRepairEnabled" 
+            and k ~= "autoSellJunkEnabled" 
+            and k ~= "ahExpansionFilterEnabled" then
             JopsiAurasDB[k] = v
         end
     end
     
-    -- Manually reset warning frame positions to defaults
+    -- Explicitly reset font and size settings
+    JopsiAurasDB.fontPath = "Friz Quadrata"
+    JopsiAurasDB.fontSize = 42
+
+    -- Manually reset warning frame positions to defaults instantly on screen
     frame:ClearAllPoints()
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 250)
     
@@ -968,11 +1255,12 @@ resetButton:SetScript("OnClick", function()
 
     hsFrame:ClearAllPoints()
     hsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 50)
-
+    
     -- Refresh UI by re-triggering OnShow
     optionsFrame:GetScript("OnShow")()
+    UpdateFont()
     
-    print("|cff9482c9JopsiAuras|r: All settings and warning positions have been reset to defaults.")
+    print("|cff9482c9JopsiAuras|r: All settings, font properties, and warning positions have been reset to defaults.")
 end)
 
 optionsFrame:SetScript("OnHide", function()
@@ -1057,6 +1345,8 @@ frame:SetScript("OnEvent", function(self, event, arg1)
         LoadFramePosition(passiveFrame, "passivePos", "CENTER", 0, 250)
         LoadFramePosition(hsFrame, "hsPos", "CENTER", 0, 50)
         LoadFramePosition(optionsFrame, "optionsPos", "TOPLEFT", 150, -125)
+        
+        UpdateFont()
         
         local currentVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or "Unknown"
         if JopsiAurasDB.lastVersion ~= currentVersion then
