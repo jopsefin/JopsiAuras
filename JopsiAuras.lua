@@ -1,5 +1,8 @@
 local addonName, ns = ...
 
+local GetItemCount = (C_Item and C_Item.GetItemCount) or GetItemCount
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+
 -- Default Database
 local defaultDB = {
     warnEnabled = true,
@@ -628,7 +631,7 @@ UpdatePetWarning = function(event)
         elseif not InCombatLockdown() or JopsiAurasDB.hsInCombatEnabled then
             local _, class = UnitClass("player")
             -- Item 5512 = Healthstone, 224464 = Demonic Healthstone (Pact of Gluttony)
-            if class == "WARLOCK" and GetItemCount(5512) == 0 and GetItemCount(224464) == 0 then
+            if class == "WARLOCK" and (GetItemCount(5512) or 0) == 0 and (GetItemCount(224464) or 0) == 0 then
                 showHS = true
             end
         end
@@ -651,7 +654,7 @@ UpdatePetWarning = function(event)
                         stillShow = true
                     elseif not InCombatLockdown() or JopsiAurasDB.hsInCombatEnabled then
                         local _, class = UnitClass("player")
-                        if class == "WARLOCK" and GetItemCount(5512) == 0 and GetItemCount(224464) == 0 then
+                        if class == "WARLOCK" and (GetItemCount(5512) or 0) == 0 and (GetItemCount(224464) or 0) == 0 then
                             stillShow = true
                         end
                     end

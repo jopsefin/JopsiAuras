@@ -1,6 +1,6 @@
-## Interface: 120100, 120007
+## Interface: 120105
 ## Title: JopsiAuras
-## Version: 2.0.0
+## Version: 2.0.1
 ## Notes: Warlock utility to track if pet is summoned or passive, to use SS on a healer in raid and if Healthstones are missing. Also includes autorepair. Options to enable/disable each feature ingame via /ja.
 ## Author: Jopsi
 ## Category: Warlock
